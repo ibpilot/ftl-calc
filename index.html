@@ -569,6 +569,11 @@
         </select>
       </div>
 
+      <div class="input-group full">
+        <label>EST. BLOCK TIME (flight plan)</label>
+        <input type="time" id="block-time" value="08:00" />
+      </div>
+
     </div><!-- end input-grid -->
 
     <!-- ACCLIMATISATION INFO PANEL -->
@@ -674,6 +679,52 @@
       </div>
     </div>
 
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label" style="display:flex; align-items:center; gap:6px;">
+          CMD discretion
+          <button class="info-btn" id="cmd-info-btn" onclick="toggleInfoPanel('cmd-info-panel','cmd-info-btn')" title="What is commander's discretion?">?</button>
+        </div>
+        <div class="toggle-sub">Unforeseen circumstances — ORO.FTL.205(f)</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="cmd-discretion" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- CMD DISCRETION INFO PANEL -->
+    <div class="info-panel" id="cmd-info-panel">
+      <div class="info-panel-title">Commander's Discretion (ORO.FTL.205(f))</div>
+
+      <div class="info-rule">
+        <span class="info-rule-badge badge-yellow">Discretion</span>
+        <div class="info-rule-text">
+          When unforeseen circumstances arise <strong>after departure</strong>, the commander may extend the FDP beyond the calculated limit. The extension must be reported to the operator.
+        </div>
+      </div>
+
+      <div class="info-rule">
+        <span class="info-rule-badge badge-green">Standard crew</span>
+        <div class="info-rule-text">
+          Maximum extension: <strong>+2 hours</strong> over the applicable FDP limit.
+        </div>
+      </div>
+
+      <div class="info-rule">
+        <span class="info-rule-badge badge-cyan" style="background:#001A20; color:var(--cyan); border:1px solid #00B4D844;">Augmented crew</span>
+        <div class="info-rule-text">
+          Maximum extension: <strong>+3 hours</strong> over the applicable FDP limit.
+        </div>
+      </div>
+
+      <div class="info-divider"></div>
+
+      <div class="info-example">
+        <strong>Important:</strong> Discretion applies to <em>unforeseen</em> circumstances only — ATC delays, weather diversions, technical issues. It cannot be pre-planned in the roster. If a crew member considers themselves unfit due to fatigue, they must not exercise discretion.
+      </div>
+    </div>
+
   </div>
 
   <!-- ETD DELAY CHECK -->
@@ -747,6 +798,14 @@
         <span class="bk-label">Extension applied</span>
         <span class="bk-val" id="bk-ext">+0:00</span>
       </div>
+      <div class="breakdown-row" id="bk-cmd-row" style="display:none;">
+        <span class="bk-label">CMD discretion</span>
+        <span class="bk-val" style="color:var(--yellow);" id="bk-cmd">+0:00</span>
+      </div>
+      <div class="breakdown-row" id="bk-latest-dep-row" style="display:none;">
+        <span class="bk-label">Latest departure</span>
+        <span class="bk-val highlight" id="bk-latest-dep">--:--</span>
+      </div>
       <div class="divider"></div>
       <div class="breakdown-row">
         <span class="bk-label">Min rest after duty</span>
@@ -775,6 +834,10 @@
         <div class="etd-row-item">
           <span class="er-label">Latest legal departure</span>
           <span class="er-val cyan" id="er-latest">--:--</span>
+        </div>
+        <div class="etd-row-item" id="er-block-row" style="display:none;">
+          <span class="er-label">Est. landing</span>
+          <span class="er-val" id="er-landing">--:--</span>
         </div>
         <div class="etd-row-item">
           <span class="er-label">Margin</span>
@@ -843,6 +906,11 @@ const IN_FLIGHT_REST_EXTENSION_AUGMENTED_CREW = { 3: 4, 2: 5, 1: 6 }
 
 // Augmented crew extension without in-flight rest (ORO.FTL.205)
 const AUGMENTED_CREW_EXTENSION_HOURS = 3
+
+// Commander's discretion extension limits (ORO.FTL.205(f))
+// Applies to unforeseen circumstances after departure only — cannot be pre-planned
+const CMD_DISCRETION_EXTENSION_STANDARD_CREW_HOURS  = 2
+const CMD_DISCRETION_EXTENSION_AUGMENTED_CREW_HOURS = 3
 
 // WOCL: Window of Circadian Low (ORO.FTL.105 definition)
 const WOCL_START_HOUR = 2  // 02:00 local
@@ -955,7 +1023,35 @@ function calculateMinimumRestHours(maxFDPHours, isAtHomeBase) {
   return Math.max(maxFDPHours, baseMinimumRest)
 }
 
-// Returns margin in minutes between FDP limit and ETD, accounting for midnight wrap
+// Returns CMD discretion extension hours based on crew type (ORO.FTL.205(f))
+function getCmdDiscretionHours(isAugmented) {
+  return isAugmented
+    ? CMD_DISCRETION_EXTENSION_AUGMENTED_CREW_HOURS
+    : CMD_DISCRETION_EXTENSION_STANDARD_CREW_HOURS
+}
+
+// Converts "HH:MM" block time string to decimal hours
+function blockTimeStringToDecimalHours(blockTimeStr) {
+  const [hours, minutes] = blockTimeStr.split(':').map(Number)
+  return hours + minutes / 60
+}
+
+// Returns latest legal off-block time given FDP limit and estimated flight duration
+// Latest departure = FDP limit − block time (must land before FDP expires)
+function calculateLatestDepartureTime(fdpLimitTimeStr, blockTimeHours, reportTimeStr) {
+  const fdpLimitMinutes  = timeStringToMinutes(fdpLimitTimeStr)
+  const reportMinutes    = timeStringToMinutes(reportTimeStr)
+  const blockTimeMinutes = Math.round(blockTimeHours * 60)
+
+  let adjustedLimit = fdpLimitMinutes
+  if (adjustedLimit < reportMinutes) adjustedLimit += MINUTES_IN_DAY
+
+  const latestDepartureMinutes = adjustedLimit - blockTimeMinutes
+  const wrappedMinutes = ((latestDepartureMinutes % MINUTES_IN_DAY) + MINUTES_IN_DAY) % MINUTES_IN_DAY
+  const hours   = Math.floor(wrappedMinutes / 60)
+  const minutes = wrappedMinutes % 60
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
 function calculateDepartureMarginMinutes(reportTimeStr, limitTimeStr, etdTimeStr) {
   const reportMinutes = timeStringToMinutes(reportTimeStr)
   let limitMinutes    = timeStringToMinutes(limitTimeStr)
@@ -1047,7 +1143,7 @@ function drawClock(reportTimeStr, limitTimeStr) {
 // UI UPDATE FUNCTIONS
 // -----------------------------------------------------------------------------
 
-function renderFDPResult(reportTimeStr, limitTimeStr, maxFDPHours, baseFDPHours, extension, woclAffected) {
+function renderFDPResult(reportTimeStr, limitTimeStr, maxFDPHours, baseFDPHours, extension, cmdDiscretionHours, latestDepartureTimeStr, woclAffected) {
   const resultCard  = document.getElementById('result-card')
   const statusLabel = document.getElementById('result-label')
 
@@ -1068,6 +1164,22 @@ function renderFDPResult(reportTimeStr, limitTimeStr, maxFDPHours, baseFDPHours,
     extensionRow.style.display = 'none'
   }
 
+  const cmdRow = document.getElementById('bk-cmd-row')
+  if (cmdDiscretionHours > 0) {
+    cmdRow.style.display = 'flex'
+    document.getElementById('bk-cmd').textContent = `+${decimalHoursToHHMM(cmdDiscretionHours)} (unforeseen)`
+  } else {
+    cmdRow.style.display = 'none'
+  }
+
+  const latestDepRow = document.getElementById('bk-latest-dep-row')
+  if (latestDepartureTimeStr) {
+    latestDepRow.style.display = 'flex'
+    document.getElementById('bk-latest-dep').textContent = latestDepartureTimeStr
+  } else {
+    latestDepRow.style.display = 'none'
+  }
+
   document.getElementById('wocl-pill').classList.toggle('visible', woclAffected)
 }
 
@@ -1077,9 +1189,12 @@ function renderRestResult(minimumRestHours, limitTimeStr) {
   document.getElementById('bk-next').textContent = earliestNextReport
 }
 
-function renderETDCheck(reportTimeStr, limitTimeStr, etdTimeStr) {
+function renderETDCheck(reportTimeStr, latestDepartureTimeStr, fdpLimitTimeStr, etdTimeStr, blockTimeHours) {
   const etdResultEl   = document.getElementById('etd-result')
-  const marginMinutes = calculateDepartureMarginMinutes(reportTimeStr, limitTimeStr, etdTimeStr)
+
+  // Compare ETD against latest legal departure (FDP limit − block time)
+  const referenceTime  = latestDepartureTimeStr || fdpLimitTimeStr
+  const marginMinutes  = calculateDepartureMarginMinutes(reportTimeStr, referenceTime, etdTimeStr)
   const isDepartureFeasible = marginMinutes >= 0
 
   const absMarginMinutes = Math.abs(marginMinutes)
@@ -1092,7 +1207,16 @@ function renderETDCheck(reportTimeStr, limitTimeStr, etdTimeStr) {
     isDepartureFeasible ? '✓ DEPARTURE FEASIBLE' : '✗ EXCEEDS FDP LIMIT'
 
   document.getElementById('er-etd').textContent    = etdTimeStr
-  document.getElementById('er-latest').textContent = limitTimeStr
+  document.getElementById('er-latest').textContent = referenceTime
+
+  // Show estimated landing time if block time is provided
+  const blockRow = document.getElementById('er-block-row')
+  if (blockTimeHours > 0) {
+    blockRow.style.display = 'flex'
+    document.getElementById('er-landing').textContent = addHoursToTimeString(etdTimeStr, blockTimeHours)
+  } else {
+    blockRow.style.display = 'none'
+  }
 
   const marginEl       = document.getElementById('er-margin')
   marginEl.textContent = marginLabel
@@ -1111,26 +1235,35 @@ function calculate() {
   const reportTimeStr = document.getElementById('report-time').value
   if (!reportTimeStr) return
 
-  const sectorCount         = document.getElementById('sectors').value
+  const sectorCount          = document.getElementById('sectors').value
   const acclimatisationState = document.getElementById('accli').value
-  const isAtHomeBase        = document.getElementById('homebase').value === 'home'
-  const isAugmented         = document.getElementById('augmented').checked
-  const hasInflightRest     = document.getElementById('inflight').checked
-  const restFacilityClass   = parseInt(document.getElementById('rest-class').value)
+  const isAtHomeBase         = document.getElementById('homebase').value === 'home'
+  const isAugmented          = document.getElementById('augmented').checked
+  const hasInflightRest      = document.getElementById('inflight').checked
+  const restFacilityClass    = parseInt(document.getElementById('rest-class').value)
+  const useCmdDiscretion     = document.getElementById('cmd-discretion').checked
+  const blockTimeStr         = document.getElementById('block-time').value
 
   const [reportHour] = reportTimeStr.split(':').map(Number)
 
-  const baseFDP    = applyAcclimatisationReduction(
+  const baseFDP   = applyAcclimatisationReduction(
     getBaseFDPHours(reportHour, sectorCount),
     acclimatisationState
   )
-  const extension  = calculateFDPExtension(isAugmented, hasInflightRest, restFacilityClass)
-  const maxFDP     = baseFDP + extension.extensionHours
-  const limitTime  = addHoursToTimeString(reportTimeStr, maxFDP)
-  const woclAffected   = dutyEncroachesWOCL(reportHour, maxFDP)
-  const minimumRest    = calculateMinimumRestHours(maxFDP, isAtHomeBase)
+  const extension         = calculateFDPExtension(isAugmented, hasInflightRest, restFacilityClass)
+  const cmdDiscretionHours = useCmdDiscretion ? getCmdDiscretionHours(isAugmented) : 0
+  const maxFDP            = baseFDP + extension.extensionHours + cmdDiscretionHours
+  const limitTime         = addHoursToTimeString(reportTimeStr, maxFDP)
+  const woclAffected      = dutyEncroachesWOCL(reportHour, maxFDP)
+  const minimumRest       = calculateMinimumRestHours(maxFDP, isAtHomeBase)
 
-  renderFDPResult(reportTimeStr, limitTime, maxFDP, baseFDP, extension, woclAffected)
+  // Latest departure = FDP limit − block time (so landing fits within FDP)
+  const blockTimeHours       = blockTimeStr ? blockTimeStringToDecimalHours(blockTimeStr) : 0
+  const latestDepartureTime  = blockTimeHours > 0
+    ? calculateLatestDepartureTime(limitTime, blockTimeHours, reportTimeStr)
+    : null
+
+  renderFDPResult(reportTimeStr, limitTime, maxFDP, baseFDP, extension, cmdDiscretionHours, latestDepartureTime, woclAffected)
   renderRestResult(minimumRest, limitTime)
   drawClock(reportTimeStr, limitTime)
 
@@ -1138,7 +1271,7 @@ function calculate() {
   const etdTimeStr       = document.getElementById('etd-time').value
 
   if (etdSectionIsOpen && etdTimeStr) {
-    renderETDCheck(reportTimeStr, limitTime, etdTimeStr)
+    renderETDCheck(reportTimeStr, latestDepartureTime, limitTime, etdTimeStr, blockTimeHours)
   } else {
     clearETDResult()
   }
