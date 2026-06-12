@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ftl-calc-v2'
+const CACHE_NAME = 'ftl-calc-v3'
 const CACHED_ASSETS = [
   './',
   './index.html',
