@@ -820,7 +820,35 @@
     <!-- WOCL warning -->
     <div class="wocl-pill" id="wocl-pill">
       <div class="wocl-dot"></div>
-      <span id="wocl-text">Duty encroaches WOCL (02:00–05:59). FDP may be reduced by operator.</span>
+      <span>Duty encroaches WOCL (02:00–05:59).</span>
+      <button class="info-btn" id="wocl-info-btn" onclick="toggleInfoPanel('wocl-info-panel','wocl-info-btn')" title="What is WOCL?" style="border-color:#A855F7; color:#A855F7; margin-left:4px; flex-shrink:0;">?</button>
+    </div>
+
+    <!-- WOCL INFO PANEL -->
+    <div class="info-panel" id="wocl-info-panel" style="margin-top:6px;">
+      <div class="info-panel-title">Window of Circadian Low (WOCL)</div>
+
+      <div class="info-rule">
+        <span class="info-rule-badge badge-purple">WOCL</span>
+        <div class="info-rule-text">
+          The <strong>Window of Circadian Low</strong> is the period between <strong>02:00 and 05:59 local time</strong> when the human body is at its lowest point of alertness and physiological performance. Defined in EASA ORO.FTL.105.
+        </div>
+      </div>
+
+      <div class="info-rule">
+        <span class="info-rule-badge badge-yellow">Why it matters</span>
+        <div class="info-rule-text">
+          Cognitive performance, reaction time, and decision-making are significantly impaired during the WOCL — even without sleep deprivation. The risk of fatigue-related error is at its peak.
+          <br/><em>EASA requires operators to reduce maximum FDP when duties encroach this window.</em>
+        </div>
+      </div>
+
+      <div class="info-divider"></div>
+
+      <div class="info-example">
+        <strong>Practical impact:</strong><br/>
+        A report time of 04:00 falls inside the WOCL. Your operator's OM-A will apply a reduced FDP table for WOCL-encroaching duties — typically <strong>1–2h shorter</strong> than the standard table shown here. Always cross-check with your Operations Manual when your duty starts or runs through the early morning hours.
+      </div>
     </div>
 
     <!-- ETD CHECK RESULT -->
