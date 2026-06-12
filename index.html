@@ -505,6 +505,180 @@
     .etd-row-item .er-val.over { color: var(--red); }
     .etd-row-item .er-val.cyan { color: var(--cyan); }
 
+    /* ── INSTALL MODAL ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 0;
+    }
+    .modal-overlay.visible { display: flex; }
+
+    .modal-sheet {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px 36px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 85dvh;
+      overflow-y: auto;
+      animation: slideUp 0.25s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .modal-handle {
+      width: 36px; height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+
+    .modal-icon {
+      width: 52px; height: 52px;
+      background: var(--cyan);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 14px;
+      font-size: 26px;
+    }
+
+    .modal-title {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .modal-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    /* Platform tabs */
+    .platform-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 4px;
+    }
+    .platform-tab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-radius: 7px;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 8px 4px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      text-align: center;
+    }
+    .platform-tab.active {
+      background: var(--card);
+      color: var(--cyan);
+    }
+
+    .platform-content { display: none; }
+    .platform-content.active { display: block; }
+
+    .install-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .install-step:last-child { border-bottom: none; }
+
+    .step-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+      width: 32px;
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    .step-text {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .ios-warning {
+      background: #1A1000;
+      border: 1px solid #FBBF2444;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: var(--yellow);
+      line-height: 1.5;
+      margin-top: 12px;
+    }
+
+    .modal-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .modal-btn-primary {
+      background: var(--cyan);
+      border: none;
+      border-radius: 10px;
+      color: #0A0E1A;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 13px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .modal-btn-secondary {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 12px;
+      padding: 11px;
+      cursor: pointer;
+    }
+
+    /* Install button in header */
+    .install-header-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: 18px;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      padding: 0;
+    }
+    .install-header-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 360px) {
       .time-block-value.limit { font-size: 26px; }
@@ -524,7 +698,79 @@
     <h1>FTL <span>CALC</span></h1>
   </div>
   <span class="reg-badge">EASA ORO.FTL.205</span>
+  <button class="install-header-btn" onclick="showInstallModal()" title="Install app">⊕</button>
 </header>
+
+<!-- INSTALL MODAL -->
+<div class="modal-overlay" id="install-modal" onclick="handleModalOverlayClick(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">📲</div>
+    <div class="modal-title">Install FTL Calc</div>
+    <div class="modal-subtitle">Add to your home screen for quick access in the cockpit — works offline, no browser needed.</div>
+
+    <!-- Platform tabs -->
+    <div class="platform-tabs">
+      <button class="platform-tab" id="tab-ios"     onclick="switchTab('ios')">iPhone / iPad</button>
+      <button class="platform-tab" id="tab-android" onclick="switchTab('android')">Android</button>
+      <button class="platform-tab" id="tab-desktop" onclick="switchTab('desktop')">Desktop</button>
+    </div>
+
+    <!-- iOS -->
+    <div class="platform-content" id="content-ios">
+      <div class="install-step">
+        <div class="step-icon">⬆️</div>
+        <div class="step-text">Tap the <strong>Share button</strong> in Safari — the square with an arrow pointing up, at the bottom of the screen.</div>
+      </div>
+      <div class="install-step">
+        <div class="step-icon">📲</div>
+        <div class="step-text">Scroll down and tap <strong>"Add to Home Screen"</strong>.</div>
+      </div>
+      <div class="install-step">
+        <div class="step-icon">✅</div>
+        <div class="step-text">Tap <strong>"Add"</strong> — FTL Calc will appear on your home screen and work just like a native app, even offline.</div>
+      </div>
+      <div class="ios-warning">⚠ Make sure you open this page in <strong>Safari</strong>. The install option is not available in Chrome or Firefox on iOS.</div>
+    </div>
+
+    <!-- Android -->
+    <div class="platform-content" id="content-android">
+      <div class="install-step">
+        <div class="step-icon">⋮</div>
+        <div class="step-text">Tap the <strong>Chrome menu</strong> — the three dots in the top-right corner of the browser.</div>
+      </div>
+      <div class="install-step">
+        <div class="step-icon">📲</div>
+        <div class="step-text">Tap <strong>"Add to Home Screen"</strong> or <strong>"Install app"</strong>.</div>
+      </div>
+      <div class="install-step">
+        <div class="step-icon">✅</div>
+        <div class="step-text">Confirm the installation — the app will appear on your home screen and work without a browser.</div>
+      </div>
+    </div>
+
+    <!-- Desktop -->
+    <div class="platform-content" id="content-desktop">
+      <div class="install-step">
+        <div class="step-icon">🖥️</div>
+        <div class="step-text">In <strong>Chrome or Edge</strong>, look for the install icon <strong>⊕</strong> in the address bar on the right side.</div>
+      </div>
+      <div class="install-step">
+        <div class="step-icon">📲</div>
+        <div class="step-text">Click the icon and select <strong>"Install"</strong> — the app opens as a standalone window without browser chrome.</div>
+      </div>
+      <div class="install-step">
+        <div class="step-icon">✅</div>
+        <div class="step-text">FTL Calc will appear in your applications and taskbar, and works fully offline.</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn-primary" onclick="dismissInstallModal(false)">Got it</button>
+      <button class="modal-btn-secondary" onclick="dismissInstallModal(true)">Don't show this again</button>
+    </div>
+  </div>
+</div>
 
 <main>
 
@@ -1402,6 +1648,76 @@ document.getElementById('augmented').addEventListener('change', function () {
 // Reveal rest facility class selector only when in-flight rest is active
 document.getElementById('inflight').addEventListener('change', function () {
   document.getElementById('rest-class-row').style.display = this.checked ? 'block' : 'none'
+})
+
+// =============================================================================
+// INSTALL MODAL
+// =============================================================================
+
+const INSTALL_DISMISSED_KEY = 'ftl-install-never-show'
+const INSTALL_LATER_KEY     = 'ftl-install-later'
+const INSTALL_LATER_DAYS    = 3  // remind again after 3 days if "later" chosen
+
+function detectPlatform() {
+  const ua = navigator.userAgent
+  if (/iPhone|iPad|iPod/.test(ua)) return 'ios'
+  if (/Android/.test(ua))          return 'android'
+  return 'desktop'
+}
+
+function switchTab(platform) {
+  ;['ios', 'android', 'desktop'].forEach(p => {
+    document.getElementById(`tab-${p}`).classList.toggle('active', p === platform)
+    document.getElementById(`content-${p}`).classList.toggle('active', p === platform)
+  })
+}
+
+function showInstallModal() {
+  const modal = document.getElementById('install-modal')
+  modal.classList.add('visible')
+  switchTab(detectPlatform())
+}
+
+function dismissInstallModal(neverShow) {
+  document.getElementById('install-modal').classList.remove('visible')
+  if (neverShow) {
+    localStorage.setItem(INSTALL_DISMISSED_KEY, '1')
+  } else {
+    // "Got it" — remind again in 3 days
+    localStorage.setItem(INSTALL_LATER_KEY, Date.now().toString())
+  }
+}
+
+function handleModalOverlayClick(event) {
+  // Close only when clicking the dark overlay, not the sheet itself
+  if (event.target === document.getElementById('install-modal')) {
+    dismissInstallModal(false)
+  }
+}
+
+function shouldShowInstallPrompt() {
+  // Never show if user explicitly dismissed permanently
+  if (localStorage.getItem(INSTALL_DISMISSED_KEY)) return false
+
+  // Don't show if already running as installed PWA
+  if (window.matchMedia('(display-mode: standalone)').matches) return false
+  if (window.navigator.standalone === true) return false
+
+  // Respect "later" delay
+  const laterTimestamp = localStorage.getItem(INSTALL_LATER_KEY)
+  if (laterTimestamp) {
+    const daysSince = (Date.now() - parseInt(laterTimestamp)) / (1000 * 60 * 60 * 24)
+    if (daysSince < INSTALL_LATER_DAYS) return false
+  }
+
+  return true
+}
+
+// Show automatically on first visit (after short delay for UX)
+window.addEventListener('load', () => {
+  if (shouldShowInstallPrompt()) {
+    setTimeout(showInstallModal, 1500)
+  }
 })
 
 // =============================================================================
