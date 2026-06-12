@@ -733,14 +733,43 @@
     <span id="etd-arrow">▾</span>
   </button>
   <div class="etd-section" id="etd-section">
-    <div class="etd-row">
+
+    <!-- Airport search for timezone -->
+    <div class="input-group" style="margin-bottom:12px;">
+      <div class="label-row">
+        <label>DEPARTURE AIRPORT (for UTC→local)</label>
+      </div>
+      <div style="position:relative;">
+        <input
+          type="text"
+          id="airport-search"
+          placeholder="Search IATA, ICAO or city name..."
+          autocomplete="off"
+          style="background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:14px; padding:10px 12px; width:100%; outline:none;"
+          oninput="onAirportSearchInput(this.value)"
+        />
+        <div id="airport-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--cyan-dim); border-radius:8px; margin-top:4px; max-height:180px; overflow-y:auto; z-index:100;"></div>
+      </div>
+      <div id="airport-selected" style="display:none; margin-top:8px; font-size:11px; color:var(--cyan); font-family:var(--mono);"></div>
+      <div id="airport-status" style="margin-top:6px; font-size:10px; color:var(--muted);"></div>
+    </div>
+
+    <div class="input-grid">
       <div class="input-group">
-        <label>ESTIMATED DEPARTURE (ETD)</label>
+        <label>ETD TIME</label>
         <input type="time" id="etd-time" value="13:00" />
       </div>
+      <div class="input-group">
+        <label>ETD FORMAT</label>
+        <select id="etd-format">
+          <option value="local" selected>Local time</option>
+          <option value="utc">UTC (Zulu)</option>
+        </select>
+      </div>
     </div>
+
     <p style="font-size:11px; color:var(--muted); margin-top:10px; line-height:1.5;">
-      Enter your planned or delayed off-block time. After calculating, the app will tell you whether you can legally depart at that time and how much margin remains.
+      Select your departure airport to convert UTC automatically. If no airport is selected, ETD is treated as local time.
     </p>
   </div>
 
@@ -1251,7 +1280,14 @@ function renderETDCheck(reportTimeStr, latestDepartureTimeStr, fdpLimitTimeStr, 
   marginEl.className   = `er-val ${isDepartureFeasible ? 'ok' : 'over'}`
 }
 
-function clearETDResult() {
+function resolveETDToLocalTime(etdTimeStr, etdFormat) {
+  // If UTC format selected and an airport with timezone is chosen, convert to local
+  if (etdFormat === 'utc' && selectedAirport) {
+    return convertUTCToLocalTime(etdTimeStr, selectedAirport.tz)
+  }
+  // Otherwise treat as local time directly
+  return etdTimeStr
+}
   document.getElementById('etd-result').className = 'etd-result'
 }
 
@@ -1297,9 +1333,11 @@ function calculate() {
 
   const etdSectionIsOpen = document.getElementById('etd-section').classList.contains('open')
   const etdTimeStr       = document.getElementById('etd-time').value
+  const etdFormat        = document.getElementById('etd-format').value
 
   if (etdSectionIsOpen && etdTimeStr) {
-    renderETDCheck(reportTimeStr, latestDepartureTime, limitTime, etdTimeStr, blockTimeHours)
+    const etdLocalTime = resolveETDToLocalTime(etdTimeStr, etdFormat)
+    renderETDCheck(reportTimeStr, latestDepartureTime, limitTime, etdLocalTime, blockTimeHours)
   } else {
     clearETDResult()
   }
@@ -1342,6 +1380,11 @@ function toggleEtd() {
   const isOpen   = section.classList.toggle('open')
   button.classList.toggle('open', isOpen)
   arrow.textContent = isOpen ? '▴' : '▾'
+
+  // Load airport database on first open
+  if (isOpen && airportDatabase.length === 0) {
+    loadAirportDatabase()
+  }
 }
 
 // Reveal in-flight rest toggle only when augmented crew is active
@@ -1357,6 +1400,212 @@ document.getElementById('augmented').addEventListener('change', function () {
 // Reveal rest facility class selector only when in-flight rest is active
 document.getElementById('inflight').addEventListener('change', function () {
   document.getElementById('rest-class-row').style.display = this.checked ? 'block' : 'none'
+})
+
+// =============================================================================
+// AIRPORT DATABASE — OpenFlights (7,600+ airports with tz data)
+// =============================================================================
+
+const OPENFLIGHTS_URL = 'https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat'
+
+// Minimal fallback for common pilot routes if fetch fails
+const AIRPORT_FALLBACK = [
+  { iata:'BCN', icao:'LEBL', name:'Barcelona El Prat',       city:'Barcelona',     tz:'Europe/Madrid'           },
+  { iata:'MAD', icao:'LEMD', name:'Madrid Barajas',          city:'Madrid',        tz:'Europe/Madrid'           },
+  { iata:'JFK', icao:'KJFK', name:'John F Kennedy Intl',     city:'New York',      tz:'America/New_York'        },
+  { iata:'MIA', icao:'KMIA', name:'Miami Intl',              city:'Miami',         tz:'America/New_York'        },
+  { iata:'BOS', icao:'KBOS', name:'Boston Logan Intl',       city:'Boston',        tz:'America/New_York'        },
+  { iata:'LAX', icao:'KLAX', name:'Los Angeles Intl',        city:'Los Angeles',   tz:'America/Los_Angeles'     },
+  { iata:'ORD', icao:'KORD', name:'Chicago O\'Hare Intl',    city:'Chicago',       tz:'America/Chicago'         },
+  { iata:'EZE', icao:'SAEZ', name:'Ministro Pistarini Intl', city:'Buenos Aires',  tz:'America/Argentina/Buenos_Aires' },
+  { iata:'GRU', icao:'SBGR', name:'Guarulhos Intl',          city:'São Paulo',     tz:'America/Sao_Paulo'       },
+  { iata:'SCL', icao:'SCEL', name:'Arturo Merino Benitez',   city:'Santiago',      tz:'America/Santiago'        },
+  { iata:'BOG', icao:'SKBO', name:'El Dorado Intl',          city:'Bogotá',        tz:'America/Bogota'          },
+  { iata:'LIM', icao:'SPJC', name:'Jorge Chavez Intl',       city:'Lima',          tz:'America/Lima'            },
+  { iata:'YYZ', icao:'CYYZ', name:'Toronto Pearson Intl',    city:'Toronto',       tz:'America/Toronto'         },
+  { iata:'CDG', icao:'LFPG', name:'Charles de Gaulle',       city:'Paris',         tz:'Europe/Paris'            },
+  { iata:'LHR', icao:'EGLL', name:'London Heathrow',         city:'London',        tz:'Europe/London'           },
+  { iata:'FRA', icao:'EDDF', name:'Frankfurt Airport',       city:'Frankfurt',     tz:'Europe/Berlin'           },
+  { iata:'AMS', icao:'EHAM', name:'Amsterdam Schiphol',      city:'Amsterdam',     tz:'Europe/Amsterdam'        },
+  { iata:'LIS', icao:'LPPT', name:'Lisbon Humberto Delgado', city:'Lisbon',        tz:'Europe/Lisbon'           },
+]
+
+// Parsed airport records — populated on load
+let airportDatabase = []
+let selectedAirport = null  // { iata, icao, name, city, tz }
+
+// Parse a single CSV line from airports.dat
+// Format: ID,Name,City,Country,IATA,ICAO,Lat,Lng,Alt,Timezone,DST,TzOlson,Type,Source
+function parseAirportLine(csvLine) {
+  const fields = []
+  let current = ''
+  let insideQuotes = false
+
+  for (const char of csvLine) {
+    if (char === '"') {
+      insideQuotes = !insideQuotes
+    } else if (char === ',' && !insideQuotes) {
+      fields.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  fields.push(current)
+
+  const iata    = fields[4] || ''
+  const icao    = fields[5] || ''
+  const tzOlson = fields[11] || ''
+
+  // Skip entries without usable codes or timezone
+  if ((!iata || iata === '\\N') && (!icao || icao === '\\N')) return null
+  if (!tzOlson || tzOlson === '\\N') return null
+
+  return {
+    iata: iata === '\\N' ? '' : iata,
+    icao: icao === '\\N' ? '' : icao,
+    name: fields[1] || '',
+    city: fields[2] || '',
+    tz:   tzOlson,
+  }
+}
+
+async function loadAirportDatabase() {
+  const statusEl = document.getElementById('airport-status')
+  statusEl.textContent = 'Loading airport database…'
+
+  try {
+    const response = await fetch(OPENFLIGHTS_URL, { cache: 'force-cache' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const csvText = await response.text()
+    const lines   = csvText.split('\n').filter(line => line.trim())
+
+    airportDatabase = lines
+      .map(parseAirportLine)
+      .filter(Boolean)
+
+    statusEl.textContent = `${airportDatabase.length.toLocaleString()} airports loaded`
+    setTimeout(() => { statusEl.textContent = '' }, 3000)
+  } catch {
+    // Fallback to curated list — covers typical pilot routes
+    airportDatabase = AIRPORT_FALLBACK
+    statusEl.textContent = `Offline — using ${AIRPORT_FALLBACK.length} common airports`
+  }
+}
+
+// Returns up to 8 airports matching the search query (IATA, ICAO, name, city)
+function searchAirports(query) {
+  if (!query || query.length < 2) return []
+  const q = query.toUpperCase().trim()
+
+  return airportDatabase
+    .filter(airport => {
+      return airport.iata.startsWith(q)
+        || airport.icao.startsWith(q)
+        || airport.name.toUpperCase().includes(q)
+        || airport.city.toUpperCase().includes(q)
+    })
+    .slice(0, 8)
+}
+
+// Returns the UTC offset in decimal hours for a given Olson timezone at current date
+// Uses Intl.DateTimeFormat to handle DST automatically
+function getUTCOffsetHoursForTimezone(olsonTimezone) {
+  try {
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: olsonTimezone,
+      timeZoneName: 'shortOffset',
+    })
+    const parts    = formatter.formatToParts(now)
+    const tzPart   = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC+0'
+    const match    = tzPart.match(/UTC([+-]\d+(?::\d+)?)/)
+    if (!match) return 0
+
+    const offsetStr = match[1]
+    const [hoursStr, minutesStr] = offsetStr.split(':')
+    const hours   = parseInt(hoursStr)
+    const minutes = minutesStr ? parseInt(minutesStr) : 0
+    return hours + (hours >= 0 ? minutes / 60 : -minutes / 60)
+  } catch {
+    return 0
+  }
+}
+
+// Converts a "HH:MM" UTC time string to local time using the selected airport timezone
+function convertUTCToLocalTime(utcTimeStr, olsonTimezone) {
+  const utcOffsetHours  = getUTCOffsetHoursForTimezone(olsonTimezone)
+  return addHoursToTimeString(utcTimeStr, utcOffsetHours)
+}
+
+// -----------------------------------------------------------------------------
+// AIRPORT SEARCH UI
+// -----------------------------------------------------------------------------
+
+function onAirportSearchInput(query) {
+  const dropdown = document.getElementById('airport-dropdown')
+
+  if (!query || query.length < 2) {
+    dropdown.style.display = 'none'
+    return
+  }
+
+  const results = searchAirports(query)
+  if (!results.length) {
+    dropdown.style.display = 'none'
+    return
+  }
+
+  dropdown.innerHTML = results.map(airport => `
+    <div
+      onclick="selectAirport(${JSON.stringify(airport).replace(/"/g, '&quot;')})"
+      style="padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px;"
+      onmouseover="this.style.background='var(--surface)'"
+      onmouseout="this.style.background=''"
+    >
+      <span style="font-family:var(--mono); font-weight:700; color:var(--cyan);">${airport.iata || airport.icao}</span>
+      <span style="color:var(--text); margin-left:8px;">${airport.name}</span>
+      <span style="color:var(--muted); margin-left:6px; font-size:10px;">${airport.city}</span>
+    </div>
+  `).join('')
+
+  dropdown.style.display = 'block'
+}
+
+function selectAirport(airport) {
+  selectedAirport = airport
+
+  const offsetHours  = getUTCOffsetHoursForTimezone(airport.tz)
+  const offsetSign   = offsetHours >= 0 ? '+' : '−'
+  const offsetAbs    = Math.abs(offsetHours)
+  const offsetH      = Math.floor(offsetAbs)
+  const offsetM      = Math.round((offsetAbs - offsetH) * 60)
+  const offsetLabel  = offsetM > 0
+    ? `UTC${offsetSign}${offsetH}:${String(offsetM).padStart(2,'0')}`
+    : `UTC${offsetSign}${offsetH}`
+
+  document.getElementById('airport-search').value = `${airport.iata || airport.icao} — ${airport.name}`
+  document.getElementById('airport-dropdown').style.display = 'none'
+  document.getElementById('airport-selected').style.display = 'block'
+  document.getElementById('airport-selected').textContent =
+    `${airport.tz} · ${offsetLabel} (DST-aware)`
+}
+
+function clearAirportSelection() {
+  selectedAirport = null
+  document.getElementById('airport-search').value = ''
+  document.getElementById('airport-selected').style.display = 'none'
+  document.getElementById('airport-dropdown').style.display = 'none'
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (event) => {
+  const dropdown = document.getElementById('airport-dropdown')
+  const searchEl = document.getElementById('airport-search')
+  if (dropdown && !dropdown.contains(event.target) && event.target !== searchEl) {
+    dropdown.style.display = 'none'
+  }
 })
 
 // -----------------------------------------------------------------------------
