@@ -896,8 +896,8 @@
       <div class="input-group">
         <label>SECTORS</label>
         <select id="sectors">
-          <option value="1">1 sector</option>
-          <option value="2" selected>2 sectors</option>
+          <option value="1" selected>1 sector</option>
+          <option value="2">2 sectors</option>
           <option value="3">3 sectors</option>
           <option value="4">4 sectors</option>
           <option value="5">5 sectors</option>
@@ -1025,12 +1025,45 @@
 
     <div id="rest-class-row" style="display:none; margin-top:10px;">
       <div class="input-group">
-        <label>REST FACILITY CLASS</label>
+        <div class="label-row">
+          <label>REST FACILITY CLASS</label>
+          <button class="info-btn" id="rest-class-info-btn" onclick="toggleInfoPanel('rest-class-info-panel','rest-class-info-btn')" title="What are the rest facility classes?">?</button>
+        </div>
         <select id="rest-class">
           <option value="3">Class 3 — Seat (reclining)</option>
-          <option value="2" selected>Class 2 — Flat seat/bunk (partial)</option>
-          <option value="1">Class 1 — Flat bed (e.g. 787 bunk)</option>
+          <option value="2">Class 2 — Flat seat/bunk (partial)</option>
+          <option value="1" selected>Class 1 — Flat bed (e.g. A330 bunk)</option>
         </select>
+      </div>
+
+      <!-- REST CLASS INFO PANEL -->
+      <div class="info-panel" id="rest-class-info-panel" style="margin-top:10px;">
+        <div class="info-panel-title">Rest Facility Classes (ORO.FTL.205(e))</div>
+
+        <div class="info-rule">
+          <span class="info-rule-badge badge-green">Class 1</span>
+          <div class="info-rule-text">
+            A <strong>flat, fully horizontal bunk or bed</strong> in a dedicated rest area, isolated from the flight deck and cabin noise. Allows the highest quality sleep.
+            <br/><em>Example: A330/A350/787 crew rest compartment upper deck bunk. FDP extension: +5h standard crew, +6h augmented.</em>
+          </div>
+        </div>
+
+        <div class="info-rule">
+          <span class="info-rule-badge badge-yellow">Class 2</span>
+          <div class="info-rule-text">
+            A seat that reclines to at least <strong>45° with leg and foot support</strong>, providing a near-flat position. Separate from passengers but not fully isolated.
+            <br/><em>Example: dedicated crew rest seat in a curtained area. FDP extension: +4h standard crew, +5h augmented.</em>
+          </div>
+        </div>
+
+        <div class="info-rule">
+          <span class="info-rule-badge" style="background:#1A0A00; color:#F97316; border:1px solid #F9731644;">Class 3</span>
+          <div class="info-rule-text">
+            A <strong>reclining passenger-type seat</strong> in the aircraft cabin, without full leg support or isolation from passengers and noise.
+            <br/><em>Example: business class seat used as crew rest. FDP extension: +3h standard crew, +4h augmented.</em>
+          </div>
+        </div>
+
       </div>
     </div>
 
