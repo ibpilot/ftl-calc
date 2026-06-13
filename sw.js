@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ftl-calc-v9'
+const CACHE_NAME = 'ftl-calc-v11'
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',

@@ -864,7 +864,7 @@
             autocomplete="off"
             style="background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:14px; padding:10px 12px; width:100%; outline:none; transition: border-color 0.15s;"
             oninput="onConvAirportInput(this.value)"
-            onfocus="this.style.borderColor='var(--cyan)'"
+            onfocus="clearConvAirportForReSearch()"
             onblur="this.style.borderColor='var(--border)'"
           />
           <div id="conv-airport-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--cyan-dim); border-radius:8px; margin-top:4px; max-height:200px; overflow-y:auto; z-index:100;"></div>
@@ -1932,18 +1932,33 @@ function searchConvAirports(query) {
 }
 
 // Returns UTC offset in decimal hours for an Olson timezone at current date (DST-aware)
+// Uses date string comparison — reliable across all browsers and locales
 function getUTCOffsetForTimezone(olsonTimezone) {
   try {
-    const parts   = new Intl.DateTimeFormat('en-US', { timeZone: olsonTimezone, timeZoneName: 'shortOffset' })
-                      .formatToParts(new Date())
-    const tzPart  = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC+0'
-    const match   = tzPart.match(/UTC([+-]\d+(?::\d+)?)/)
-    if (!match) return 0
-    const [hoursStr, minutesStr] = match[1].split(':')
-    const hours   = parseInt(hoursStr)
-    const minutes = minutesStr ? parseInt(minutesStr) : 0
-    return hours + (hours >= 0 ? minutes / 60 : -minutes / 60)
-  } catch { return 0 }
+    const now = new Date()
+
+    // Get the current time expressed in the target timezone
+    const localString = now.toLocaleString('en-CA', {
+      timeZone: olsonTimezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    })
+
+    // Parse the local date/time string into a Date object (treated as UTC)
+    // en-CA format: YYYY-MM-DD, HH:MM:SS
+    const [datePart, timePart] = localString.split(', ')
+    const localAsUTC = new Date(`${datePart}T${timePart}Z`)
+
+    // Offset = local time interpreted as UTC − actual UTC
+    const offsetMs    = localAsUTC.getTime() - now.getTime()
+    const offsetHours = offsetMs / (1000 * 60 * 60)
+
+    // Round to nearest quarter hour (handles offsets like UTC+5:30, UTC+5:45)
+    return Math.round(offsetHours * 4) / 4
+  } catch {
+    return 0
+  }
 }
 
 // Converts a local "HH:MM" time string to UTC given a UTC offset in decimal hours
@@ -1968,6 +1983,16 @@ function toggleUTCConverter() {
   if (isOpen && !convDatabaseLoaded) {
     loadConvAirportDatabase()
   }
+}
+
+function clearConvAirportForReSearch() {
+  // Clear the field and selection so the pilot can search fresh without manual deletion
+  const searchEl = document.getElementById('conv-airport-search')
+  searchEl.value = ''
+  searchEl.style.borderColor = 'var(--cyan)'
+  convSelectedAirport = null
+  document.getElementById('conv-airport-selected').style.display = 'none'
+  document.getElementById('utc-result-box').classList.remove('visible')
 }
 
 function onConvAirportInput(query) {
