@@ -973,49 +973,31 @@
 
   </div>
 
-  <!-- ETD DELAY CHECK -->
+
+  <!-- DEPARTURE WINDOW CHECK -->
   <button class="etd-toggle-btn" id="etd-toggle-btn" onclick="toggleEtd()">
-    + Check a departure time (delay?)
+    Need to check your departure window?
     <span id="etd-arrow">▾</span>
   </button>
   <div class="etd-section" id="etd-section">
 
-    <!-- Airport search for timezone -->
-    <div class="input-group" style="margin-bottom:12px;">
-      <div class="label-row">
-        <label>DEPARTURE AIRPORT (for UTC→local)</label>
-      </div>
-      <div style="position:relative;">
-        <input
-          type="text"
-          id="airport-search"
-          placeholder="Search IATA, ICAO or city name..."
-          autocomplete="off"
-          style="background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:14px; padding:10px 12px; width:100%; outline:none;"
-          oninput="onAirportSearchInput(this.value)"
-        />
-        <div id="airport-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--cyan-dim); border-radius:8px; margin-top:4px; max-height:180px; overflow-y:auto; z-index:100;"></div>
-      </div>
-      <div id="airport-selected" style="display:none; margin-top:8px; font-size:11px; color:var(--cyan); font-family:var(--mono);"></div>
-      <div id="airport-status" style="margin-top:6px; font-size:10px; color:var(--muted);"></div>
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:11px; color:var(--muted); line-height:1.6;">
+      ⏱ <strong style="color:var(--text);">All times in UTC (Zulu).</strong> Enter your ETD and ETA as per the flight plan. The app will check whether your departure and landing fall within the FDP limit.
     </div>
 
     <div class="input-grid">
       <div class="input-group">
-        <label>ETD TIME</label>
+        <label>ETD (UTC)</label>
         <input type="time" id="etd-time" value="13:00" />
       </div>
       <div class="input-group">
-        <label>ETD FORMAT</label>
-        <select id="etd-format">
-          <option value="local" selected>Local time</option>
-          <option value="utc">UTC (Zulu)</option>
-        </select>
+        <label>ETA (UTC)</label>
+        <input type="time" id="eta-time" value="21:00" />
       </div>
     </div>
 
     <p style="font-size:11px; color:var(--muted); margin-top:10px; line-height:1.5;">
-      Select your departure airport to convert UTC automatically. If no airport is selected, ETD is treated as local time.
+      If you only want to check the ETD, leave ETA blank. Block time will be calculated automatically when both are provided.
     </p>
   </div>
 
@@ -1131,19 +1113,27 @@
       <div class="etd-result-header" id="etd-result-header">DEPARTURE CHECK</div>
       <div class="etd-rows">
         <div class="etd-row-item">
-          <span class="er-label">Your ETD</span>
+          <span class="er-label">ETD (UTC)</span>
           <span class="er-val" id="er-etd">--:--</span>
+        </div>
+        <div class="etd-row-item" id="er-eta-row" style="display:none;">
+          <span class="er-label">ETA (UTC)</span>
+          <span class="er-val" id="er-eta">--:--</span>
+        </div>
+        <div class="etd-row-item" id="er-block-row" style="display:none;">
+          <span class="er-label">Block time</span>
+          <span class="er-val" id="er-block">--:--</span>
         </div>
         <div class="etd-row-item">
           <span class="er-label">Latest legal departure</span>
           <span class="er-val cyan" id="er-latest">--:--</span>
         </div>
-        <div class="etd-row-item" id="er-block-row" style="display:none;">
-          <span class="er-label">Est. landing</span>
+        <div class="etd-row-item" id="er-landing-row" style="display:none;">
+          <span class="er-label">Landing vs FDP limit</span>
           <span class="er-val" id="er-landing">--:--</span>
         </div>
         <div class="etd-row-item">
-          <span class="er-label">Margin</span>
+          <span class="er-label">Departure margin</span>
           <span class="er-val" id="er-margin">--:--</span>
         </div>
       </div>
@@ -1492,47 +1482,81 @@ function renderRestResult(minimumRestHours, limitTimeStr) {
   document.getElementById('bk-next').textContent = earliestNextReport
 }
 
-function renderETDCheck(reportTimeStr, latestDepartureTimeStr, fdpLimitTimeStr, etdTimeStr, blockTimeHours) {
-  const etdResultEl   = document.getElementById('etd-result')
+function renderETDCheck(reportTimeStr, latestDepartureTimeStr, fdpLimitTimeStr, etdTimeStr, etaTimeStr) {
+  const etdResultEl = document.getElementById('etd-result')
 
-  // Compare ETD against latest legal departure (FDP limit − block time)
-  const referenceTime  = latestDepartureTimeStr || fdpLimitTimeStr
-  const marginMinutes  = calculateDepartureMarginMinutes(reportTimeStr, referenceTime, etdTimeStr)
-  const isDepartureFeasible = marginMinutes >= 0
+  // Use latest departure (FDP limit − block time) if available, else FDP limit
+  const referenceTime     = latestDepartureTimeStr || fdpLimitTimeStr
+  const departureMargin   = calculateDepartureMarginMinutes(reportTimeStr, referenceTime, etdTimeStr)
+  const isDepartureFeasible = departureMargin >= 0
 
-  const absMarginMinutes = Math.abs(marginMinutes)
-  const marginHours      = Math.floor(absMarginMinutes / 60)
-  const marginMins       = absMarginMinutes % 60
-  const marginLabel      = `${isDepartureFeasible ? '+' : '−'}${String(marginHours).padStart(2, '0')}:${String(marginMins).padStart(2, '0')}`
+  // If ETA provided, also check whether landing falls within FDP limit
+  const hasETA = etaTimeStr && etaTimeStr !== ''
+  let isLandingFeasible = true
+  let landingMarginLabel = ''
 
-  etdResultEl.className = `etd-result visible ${isDepartureFeasible ? 'etd-ok' : 'etd-warn'}`
+  if (hasETA) {
+    const landingMargin   = calculateDepartureMarginMinutes(reportTimeStr, fdpLimitTimeStr, etaTimeStr)
+    isLandingFeasible     = landingMargin >= 0
+    const absLanding      = Math.abs(landingMargin)
+    const lh = Math.floor(absLanding / 60)
+    const lm = absLanding % 60
+    landingMarginLabel    = `${isLandingFeasible ? '✓ +' : '✗ −'}${String(lh).padStart(2,'0')}:${String(lm).padStart(2,'0')} vs FDP limit`
+  }
+
+  const overallFeasible = isDepartureFeasible && isLandingFeasible
+  etdResultEl.className = `etd-result visible ${overallFeasible ? 'etd-ok' : 'etd-warn'}`
   document.getElementById('etd-result-header').textContent =
-    isDepartureFeasible ? '✓ DEPARTURE FEASIBLE' : '✗ EXCEEDS FDP LIMIT'
+    overallFeasible ? '✓ DEPARTURE FEASIBLE' : '✗ EXCEEDS FDP LIMIT'
 
+  // ETD row
   document.getElementById('er-etd').textContent    = etdTimeStr
-  document.getElementById('er-latest').textContent = referenceTime
 
-  // Show estimated landing time if block time is provided
+  // ETA row
+  const etaRow = document.getElementById('er-eta-row')
+  if (hasETA) {
+    etaRow.style.display = 'flex'
+    document.getElementById('er-eta').textContent = etaTimeStr
+  } else {
+    etaRow.style.display = 'none'
+  }
+
+  // Block time row (derived from ETD + ETA)
   const blockRow = document.getElementById('er-block-row')
-  if (blockTimeHours > 0) {
+  if (hasETA) {
+    let etdMins = timeStringToMinutes(etdTimeStr)
+    let etaMins = timeStringToMinutes(etaTimeStr)
+    if (etaMins < etdMins) etaMins += MINUTES_IN_DAY  // overnight flight
+    const blockMins = etaMins - etdMins
+    const bh = Math.floor(blockMins / 60)
+    const bm = blockMins % 60
     blockRow.style.display = 'flex'
-    document.getElementById('er-landing').textContent = addHoursToTimeString(etdTimeStr, blockTimeHours)
+    document.getElementById('er-block').textContent = `${String(bh).padStart(2,'0')}:${String(bm).padStart(2,'0')}`
   } else {
     blockRow.style.display = 'none'
   }
 
-  const marginEl       = document.getElementById('er-margin')
-  marginEl.textContent = marginLabel
-  marginEl.className   = `er-val ${isDepartureFeasible ? 'ok' : 'over'}`
-}
+  // Latest legal departure
+  document.getElementById('er-latest').textContent = referenceTime
 
-function resolveETDToLocalTime(etdTimeStr, etdFormat) {
-  // If UTC format selected and an airport with timezone is chosen, convert to local
-  if (etdFormat === 'utc' && selectedAirport) {
-    return convertUTCToLocalTime(etdTimeStr, selectedAirport.tz)
+  // Landing check row
+  const landingRow = document.getElementById('er-landing-row')
+  if (hasETA) {
+    landingRow.style.display = 'flex'
+    const landingEl = document.getElementById('er-landing')
+    landingEl.textContent = landingMarginLabel
+    landingEl.className   = `er-val ${isLandingFeasible ? 'ok' : 'over'}`
+  } else {
+    landingRow.style.display = 'none'
   }
-  // Otherwise treat as local time directly
-  return etdTimeStr
+
+  // Departure margin
+  const absMargin  = Math.abs(departureMargin)
+  const mh = Math.floor(absMargin / 60)
+  const mm = absMargin % 60
+  const marginEl   = document.getElementById('er-margin')
+  marginEl.textContent = `${isDepartureFeasible ? '+' : '−'}${String(mh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`
+  marginEl.className   = `er-val ${isDepartureFeasible ? 'ok' : 'over'}`
 }
 
 function clearETDResult() {
@@ -1581,11 +1605,10 @@ function calculate() {
 
   const etdSectionIsOpen = document.getElementById('etd-section').classList.contains('open')
   const etdTimeStr       = document.getElementById('etd-time').value
-  const etdFormat        = document.getElementById('etd-format').value
+  const etaTimeStr       = document.getElementById('eta-time').value
 
   if (etdSectionIsOpen && etdTimeStr) {
-    const etdLocalTime = resolveETDToLocalTime(etdTimeStr, etdFormat)
-    renderETDCheck(reportTimeStr, latestDepartureTime, limitTime, etdLocalTime, blockTimeHours)
+    renderETDCheck(reportTimeStr, latestDepartureTime, limitTime, etdTimeStr, etaTimeStr)
   } else {
     clearETDResult()
   }
@@ -1628,11 +1651,6 @@ function toggleEtd() {
   const isOpen   = section.classList.toggle('open')
   button.classList.toggle('open', isOpen)
   arrow.textContent = isOpen ? '▴' : '▾'
-
-  // Load airport database on first open
-  if (isOpen && airportDatabase.length === 0) {
-    loadAirportDatabase()
-  }
 }
 
 // Reveal in-flight rest toggle only when augmented crew is active
@@ -1717,212 +1735,6 @@ function shouldShowInstallPrompt() {
 window.addEventListener('load', () => {
   if (shouldShowInstallPrompt()) {
     setTimeout(showInstallModal, 1500)
-  }
-})
-
-// =============================================================================
-// AIRPORT DATABASE — OpenFlights (7,600+ airports with tz data)
-// =============================================================================
-
-const OPENFLIGHTS_URL = 'https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat'
-
-// Minimal fallback for common pilot routes if fetch fails
-const AIRPORT_FALLBACK = [
-  { iata:'BCN', icao:'LEBL', name:'Barcelona El Prat',       city:'Barcelona',     tz:'Europe/Madrid'           },
-  { iata:'MAD', icao:'LEMD', name:'Madrid Barajas',          city:'Madrid',        tz:'Europe/Madrid'           },
-  { iata:'JFK', icao:'KJFK', name:'John F Kennedy Intl',     city:'New York',      tz:'America/New_York'        },
-  { iata:'MIA', icao:'KMIA', name:'Miami Intl',              city:'Miami',         tz:'America/New_York'        },
-  { iata:'BOS', icao:'KBOS', name:'Boston Logan Intl',       city:'Boston',        tz:'America/New_York'        },
-  { iata:'LAX', icao:'KLAX', name:'Los Angeles Intl',        city:'Los Angeles',   tz:'America/Los_Angeles'     },
-  { iata:'ORD', icao:'KORD', name:'Chicago O\'Hare Intl',    city:'Chicago',       tz:'America/Chicago'         },
-  { iata:'EZE', icao:'SAEZ', name:'Ministro Pistarini Intl', city:'Buenos Aires',  tz:'America/Argentina/Buenos_Aires' },
-  { iata:'GRU', icao:'SBGR', name:'Guarulhos Intl',          city:'São Paulo',     tz:'America/Sao_Paulo'       },
-  { iata:'SCL', icao:'SCEL', name:'Arturo Merino Benitez',   city:'Santiago',      tz:'America/Santiago'        },
-  { iata:'BOG', icao:'SKBO', name:'El Dorado Intl',          city:'Bogotá',        tz:'America/Bogota'          },
-  { iata:'LIM', icao:'SPJC', name:'Jorge Chavez Intl',       city:'Lima',          tz:'America/Lima'            },
-  { iata:'YYZ', icao:'CYYZ', name:'Toronto Pearson Intl',    city:'Toronto',       tz:'America/Toronto'         },
-  { iata:'CDG', icao:'LFPG', name:'Charles de Gaulle',       city:'Paris',         tz:'Europe/Paris'            },
-  { iata:'LHR', icao:'EGLL', name:'London Heathrow',         city:'London',        tz:'Europe/London'           },
-  { iata:'FRA', icao:'EDDF', name:'Frankfurt Airport',       city:'Frankfurt',     tz:'Europe/Berlin'           },
-  { iata:'AMS', icao:'EHAM', name:'Amsterdam Schiphol',      city:'Amsterdam',     tz:'Europe/Amsterdam'        },
-  { iata:'LIS', icao:'LPPT', name:'Lisbon Humberto Delgado', city:'Lisbon',        tz:'Europe/Lisbon'           },
-]
-
-// Parsed airport records — populated on load
-let airportDatabase = []
-let selectedAirport = null  // { iata, icao, name, city, tz }
-
-// Parse a single CSV line from airports.dat
-// Format: ID,Name,City,Country,IATA,ICAO,Lat,Lng,Alt,Timezone,DST,TzOlson,Type,Source
-function parseAirportLine(csvLine) {
-  const fields = []
-  let current = ''
-  let insideQuotes = false
-
-  for (const char of csvLine) {
-    if (char === '"') {
-      insideQuotes = !insideQuotes
-    } else if (char === ',' && !insideQuotes) {
-      fields.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  fields.push(current)
-
-  const iata    = fields[4] || ''
-  const icao    = fields[5] || ''
-  const tzOlson = fields[11] || ''
-
-  // Skip entries without usable codes or timezone
-  if ((!iata || iata === '\\N') && (!icao || icao === '\\N')) return null
-  if (!tzOlson || tzOlson === '\\N') return null
-
-  return {
-    iata: iata === '\\N' ? '' : iata,
-    icao: icao === '\\N' ? '' : icao,
-    name: fields[1] || '',
-    city: fields[2] || '',
-    tz:   tzOlson,
-  }
-}
-
-async function loadAirportDatabase() {
-  const statusEl = document.getElementById('airport-status')
-  statusEl.textContent = 'Loading airport database…'
-
-  try {
-    const response = await fetch(OPENFLIGHTS_URL, { cache: 'force-cache' })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-
-    const csvText = await response.text()
-    const lines   = csvText.split('\n').filter(line => line.trim())
-
-    airportDatabase = lines
-      .map(parseAirportLine)
-      .filter(Boolean)
-
-    statusEl.textContent = `${airportDatabase.length.toLocaleString()} airports loaded`
-    setTimeout(() => { statusEl.textContent = '' }, 3000)
-  } catch {
-    // Fallback to curated list — covers typical pilot routes
-    airportDatabase = AIRPORT_FALLBACK
-    statusEl.textContent = `Offline — using ${AIRPORT_FALLBACK.length} common airports`
-  }
-}
-
-// Returns up to 8 airports matching the search query (IATA, ICAO, name, city)
-function searchAirports(query) {
-  if (!query || query.length < 2) return []
-  const q = query.toUpperCase().trim()
-
-  return airportDatabase
-    .filter(airport => {
-      return airport.iata.startsWith(q)
-        || airport.icao.startsWith(q)
-        || airport.name.toUpperCase().includes(q)
-        || airport.city.toUpperCase().includes(q)
-    })
-    .slice(0, 8)
-}
-
-// Returns the UTC offset in decimal hours for a given Olson timezone at current date
-// Uses Intl.DateTimeFormat to handle DST automatically
-function getUTCOffsetHoursForTimezone(olsonTimezone) {
-  try {
-    const now = new Date()
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: olsonTimezone,
-      timeZoneName: 'shortOffset',
-    })
-    const parts    = formatter.formatToParts(now)
-    const tzPart   = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC+0'
-    const match    = tzPart.match(/UTC([+-]\d+(?::\d+)?)/)
-    if (!match) return 0
-
-    const offsetStr = match[1]
-    const [hoursStr, minutesStr] = offsetStr.split(':')
-    const hours   = parseInt(hoursStr)
-    const minutes = minutesStr ? parseInt(minutesStr) : 0
-    return hours + (hours >= 0 ? minutes / 60 : -minutes / 60)
-  } catch {
-    return 0
-  }
-}
-
-// Converts a "HH:MM" UTC time string to local time using the selected airport timezone
-function convertUTCToLocalTime(utcTimeStr, olsonTimezone) {
-  const utcOffsetHours  = getUTCOffsetHoursForTimezone(olsonTimezone)
-  return addHoursToTimeString(utcTimeStr, utcOffsetHours)
-}
-
-// -----------------------------------------------------------------------------
-// AIRPORT SEARCH UI
-// -----------------------------------------------------------------------------
-
-function onAirportSearchInput(query) {
-  const dropdown = document.getElementById('airport-dropdown')
-
-  if (!query || query.length < 2) {
-    dropdown.style.display = 'none'
-    return
-  }
-
-  const results = searchAirports(query)
-  if (!results.length) {
-    dropdown.style.display = 'none'
-    return
-  }
-
-  dropdown.innerHTML = results.map(airport => `
-    <div
-      onclick="selectAirport(${JSON.stringify(airport).replace(/"/g, '&quot;')})"
-      style="padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px;"
-      onmouseover="this.style.background='var(--surface)'"
-      onmouseout="this.style.background=''"
-    >
-      <span style="font-family:var(--mono); font-weight:700; color:var(--cyan);">${airport.iata || airport.icao}</span>
-      <span style="color:var(--text); margin-left:8px;">${airport.name}</span>
-      <span style="color:var(--muted); margin-left:6px; font-size:10px;">${airport.city}</span>
-    </div>
-  `).join('')
-
-  dropdown.style.display = 'block'
-}
-
-function selectAirport(airport) {
-  selectedAirport = airport
-
-  const offsetHours  = getUTCOffsetHoursForTimezone(airport.tz)
-  const offsetSign   = offsetHours >= 0 ? '+' : '−'
-  const offsetAbs    = Math.abs(offsetHours)
-  const offsetH      = Math.floor(offsetAbs)
-  const offsetM      = Math.round((offsetAbs - offsetH) * 60)
-  const offsetLabel  = offsetM > 0
-    ? `UTC${offsetSign}${offsetH}:${String(offsetM).padStart(2,'0')}`
-    : `UTC${offsetSign}${offsetH}`
-
-  document.getElementById('airport-search').value = `${airport.iata || airport.icao} — ${airport.name}`
-  document.getElementById('airport-dropdown').style.display = 'none'
-  document.getElementById('airport-selected').style.display = 'block'
-  document.getElementById('airport-selected').textContent =
-    `${airport.tz} · ${offsetLabel} (DST-aware)`
-}
-
-function clearAirportSelection() {
-  selectedAirport = null
-  document.getElementById('airport-search').value = ''
-  document.getElementById('airport-selected').style.display = 'none'
-  document.getElementById('airport-dropdown').style.display = 'none'
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', (event) => {
-  const dropdown = document.getElementById('airport-dropdown')
-  const searchEl = document.getElementById('airport-search')
-  if (dropdown && !dropdown.contains(event.target) && event.target !== searchEl) {
-    dropdown.style.display = 'none'
   }
 })
 
