@@ -679,6 +679,70 @@
     }
     .install-header-btn:hover { border-color: var(--cyan); color: var(--cyan); }
 
+    /* ── UTC CONVERTER ── */
+    .utc-converter-btn {
+      width: 100%;
+      background: none;
+      border: 1px dashed #2A3550;
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 11px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .utc-converter-btn:hover { border-color: var(--cyan-dim); color: var(--text); }
+    .utc-converter-btn.open  { border-color: var(--cyan-dim); border-style: solid; color: var(--text); }
+
+    .utc-converter-section {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--cyan-dim);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: -6px;
+    }
+    .utc-converter-section.open { display: block; }
+
+    .utc-result-box {
+      display: none;
+      margin-top: 14px;
+      background: #001A20;
+      border: 1px solid #00B4D844;
+      border-radius: 9px;
+      padding: 14px;
+    }
+    .utc-result-box.visible { display: block; }
+
+    .utc-result-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .utc-result-value {
+      font-family: var(--mono);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--cyan);
+      line-height: 1;
+    }
+
+    .utc-result-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 360px) {
       .time-block-value.limit { font-size: 26px; }
@@ -773,6 +837,51 @@
 </div>
 
 <main>
+
+  <!-- UTC CONVERTER -->
+  <button class="utc-converter-btn" id="utc-converter-btn" onclick="toggleUTCConverter()">
+    Need to convert local time to UTC?
+    <span id="utc-converter-arrow">▾</span>
+  </button>
+  <div class="utc-converter-section" id="utc-converter-section">
+
+    <div style="font-size:11px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+      Enter your local report time and select your current location. The UTC equivalent will be calculated automatically, including daylight saving time.
+    </div>
+
+    <div class="input-grid">
+      <div class="input-group">
+        <label>LOCAL TIME</label>
+        <input type="time" id="conv-local-time" value="08:00" oninput="runUTCConversion()" />
+      </div>
+      <div class="input-group">
+        <label>LOCATION</label>
+        <div style="position:relative;">
+          <input
+            type="text"
+            id="conv-airport-search"
+            placeholder="City or airport…"
+            autocomplete="off"
+            style="background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:14px; padding:10px 12px; width:100%; outline:none; transition: border-color 0.15s;"
+            oninput="onConvAirportInput(this.value)"
+            onfocus="this.style.borderColor='var(--cyan)'"
+            onblur="this.style.borderColor='var(--border)'"
+          />
+          <div id="conv-airport-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--cyan-dim); border-radius:8px; margin-top:4px; max-height:200px; overflow-y:auto; z-index:100;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="conv-airport-selected" style="display:none; font-size:11px; color:var(--cyan); font-family:var(--mono); margin-top:8px;"></div>
+
+    <!-- Result -->
+    <div class="utc-result-box" id="utc-result-box">
+      <div class="utc-result-label">UTC equivalent</div>
+      <div class="utc-result-value" id="utc-result-value">--:--</div>
+      <div class="utc-result-meta" id="utc-result-meta"></div>
+    </div>
+
+  </div>
 
   <!-- INPUTS -->
   <div class="card">
@@ -1735,6 +1844,204 @@ function shouldShowInstallPrompt() {
 window.addEventListener('load', () => {
   if (shouldShowInstallPrompt()) {
     setTimeout(showInstallModal, 1500)
+  }
+})
+
+// =============================================================================
+// UTC CONVERTER — local time → UTC using OpenFlights timezone database
+// =============================================================================
+
+const OPENFLIGHTS_URL   = 'https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat'
+const AIRPORT_FALLBACK  = [
+  { iata:'BCN', icao:'LEBL', name:'Barcelona El Prat',        city:'Barcelona',    tz:'Europe/Madrid'                  },
+  { iata:'MAD', icao:'LEMD', name:'Madrid Barajas',           city:'Madrid',       tz:'Europe/Madrid'                  },
+  { iata:'JFK', icao:'KJFK', name:'John F Kennedy Intl',      city:'New York',     tz:'America/New_York'               },
+  { iata:'MIA', icao:'KMIA', name:'Miami Intl',               city:'Miami',        tz:'America/New_York'               },
+  { iata:'BOS', icao:'KBOS', name:'Boston Logan Intl',        city:'Boston',       tz:'America/New_York'               },
+  { iata:'LAX', icao:'KLAX', name:'Los Angeles Intl',         city:'Los Angeles',  tz:'America/Los_Angeles'            },
+  { iata:'ORD', icao:'KORD', name:'Chicago O\'Hare Intl',     city:'Chicago',      tz:'America/Chicago'                },
+  { iata:'EZE', icao:'SAEZ', name:'Ministro Pistarini Intl',  city:'Buenos Aires', tz:'America/Argentina/Buenos_Aires' },
+  { iata:'GRU', icao:'SBGR', name:'Guarulhos Intl',           city:'São Paulo',    tz:'America/Sao_Paulo'              },
+  { iata:'SCL', icao:'SCEL', name:'Arturo Merino Benitez',    city:'Santiago',     tz:'America/Santiago'               },
+  { iata:'BOG', icao:'SKBO', name:'El Dorado Intl',           city:'Bogotá',       tz:'America/Bogota'                 },
+  { iata:'LIM', icao:'SPJC', name:'Jorge Chavez Intl',        city:'Lima',         tz:'America/Lima'                   },
+  { iata:'YYZ', icao:'CYYZ', name:'Toronto Pearson Intl',     city:'Toronto',      tz:'America/Toronto'                },
+  { iata:'CDG', icao:'LFPG', name:'Charles de Gaulle',        city:'Paris',        tz:'Europe/Paris'                   },
+  { iata:'LHR', icao:'EGLL', name:'London Heathrow',          city:'London',       tz:'Europe/London'                  },
+  { iata:'FRA', icao:'EDDF', name:'Frankfurt Airport',        city:'Frankfurt',    tz:'Europe/Berlin'                  },
+  { iata:'AMS', icao:'EHAM', name:'Amsterdam Schiphol',       city:'Amsterdam',    tz:'Europe/Amsterdam'               },
+  { iata:'LIS', icao:'LPPT', name:'Lisbon Humberto Delgado',  city:'Lisbon',       tz:'Europe/Lisbon'                  },
+]
+
+let convAirportDatabase  = []
+let convSelectedAirport  = null
+let convDatabaseLoaded   = false
+
+// Parse CSV line from airports.dat — returns { iata, icao, name, city, tz } or null
+function parseAirportCSVLine(csvLine) {
+  const fields = []
+  let current  = ''
+  let inQuotes = false
+
+  for (const char of csvLine) {
+    if (char === '"')                { inQuotes = !inQuotes }
+    else if (char === ',' && !inQuotes) { fields.push(current); current = '' }
+    else                             { current += char }
+  }
+  fields.push(current)
+
+  const iata    = fields[4] || ''
+  const icao    = fields[5] || ''
+  const tzOlson = fields[11] || ''
+
+  if ((!iata || iata === '\\N') && (!icao || icao === '\\N')) return null
+  if (!tzOlson || tzOlson === '\\N') return null
+
+  return {
+    iata: iata === '\\N' ? '' : iata,
+    icao: icao === '\\N' ? '' : icao,
+    name: fields[1] || '',
+    city: fields[2] || '',
+    tz:   tzOlson,
+  }
+}
+
+async function loadConvAirportDatabase() {
+  if (convDatabaseLoaded) return
+
+  try {
+    const response = await fetch(OPENFLIGHTS_URL, { cache: 'force-cache' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const csvText        = await response.text()
+    convAirportDatabase  = csvText.split('\n').filter(Boolean).map(parseAirportCSVLine).filter(Boolean)
+    convDatabaseLoaded   = true
+  } catch {
+    convAirportDatabase = AIRPORT_FALLBACK
+    convDatabaseLoaded  = true
+  }
+}
+
+// Returns up to 8 matching airports for the search query
+function searchConvAirports(query) {
+  if (!query || query.length < 2) return []
+  const q = query.toUpperCase().trim()
+  return convAirportDatabase
+    .filter(a => a.iata.startsWith(q) || a.icao.startsWith(q)
+              || a.name.toUpperCase().includes(q) || a.city.toUpperCase().includes(q))
+    .slice(0, 8)
+}
+
+// Returns UTC offset in decimal hours for an Olson timezone at current date (DST-aware)
+function getUTCOffsetForTimezone(olsonTimezone) {
+  try {
+    const parts   = new Intl.DateTimeFormat('en-US', { timeZone: olsonTimezone, timeZoneName: 'shortOffset' })
+                      .formatToParts(new Date())
+    const tzPart  = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC+0'
+    const match   = tzPart.match(/UTC([+-]\d+(?::\d+)?)/)
+    if (!match) return 0
+    const [hoursStr, minutesStr] = match[1].split(':')
+    const hours   = parseInt(hoursStr)
+    const minutes = minutesStr ? parseInt(minutesStr) : 0
+    return hours + (hours >= 0 ? minutes / 60 : -minutes / 60)
+  } catch { return 0 }
+}
+
+// Converts a local "HH:MM" time string to UTC given a UTC offset in decimal hours
+function localTimeToUTC(localTimeStr, utcOffsetHours) {
+  // UTC = local − offset
+  return addHoursToTimeString(localTimeStr, -utcOffsetHours)
+}
+
+// -----------------------------------------------------------------------------
+// CONVERTER UI
+// -----------------------------------------------------------------------------
+
+function toggleUTCConverter() {
+  const section = document.getElementById('utc-converter-section')
+  const button  = document.getElementById('utc-converter-btn')
+  const arrow   = document.getElementById('utc-converter-arrow')
+  const isOpen  = section.classList.toggle('open')
+  button.classList.toggle('open', isOpen)
+  arrow.textContent = isOpen ? '▴' : '▾'
+
+  // Load airport database on first open
+  if (isOpen && !convDatabaseLoaded) {
+    loadConvAirportDatabase()
+  }
+}
+
+function onConvAirportInput(query) {
+  const dropdown = document.getElementById('conv-airport-dropdown')
+  if (!query || query.length < 2) { dropdown.style.display = 'none'; return }
+
+  const results = searchConvAirports(query)
+  if (!results.length) { dropdown.style.display = 'none'; return }
+
+  dropdown.innerHTML = results.map(airport => `
+    <div
+      onclick="selectConvAirport(${JSON.stringify(airport).replace(/"/g, '&quot;')})"
+      style="padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px;"
+      onmouseover="this.style.background='var(--surface)'"
+      onmouseout="this.style.background=''"
+    >
+      <span style="font-family:var(--mono); font-weight:700; color:var(--cyan);">${airport.iata || airport.icao}</span>
+      <span style="color:var(--text); margin-left:8px;">${airport.name}</span>
+      <span style="color:var(--muted); margin-left:6px; font-size:10px;">${airport.city}</span>
+    </div>
+  `).join('')
+
+  dropdown.style.display = 'block'
+}
+
+function selectConvAirport(airport) {
+  convSelectedAirport = airport
+
+  const offsetHours = getUTCOffsetForTimezone(airport.tz)
+  const sign        = offsetHours >= 0 ? '+' : '−'
+  const absH        = Math.floor(Math.abs(offsetHours))
+  const absM        = Math.round((Math.abs(offsetHours) - absH) * 60)
+  const offsetLabel = absM > 0
+    ? `UTC${sign}${absH}:${String(absM).padStart(2, '0')}`
+    : `UTC${sign}${absH}`
+
+  document.getElementById('conv-airport-search').value = `${airport.iata || airport.icao} — ${airport.name}`
+  document.getElementById('conv-airport-dropdown').style.display = 'none'
+  document.getElementById('conv-airport-selected').style.display = 'block'
+  document.getElementById('conv-airport-selected').textContent   =
+    `${airport.tz} · ${offsetLabel} (DST-aware)`
+
+  runUTCConversion()
+}
+
+function runUTCConversion() {
+  if (!convSelectedAirport) return
+
+  const localTimeStr = document.getElementById('conv-local-time').value
+  if (!localTimeStr) return
+
+  const offsetHours  = getUTCOffsetForTimezone(convSelectedAirport.tz)
+  const utcTimeStr   = localTimeToUTC(localTimeStr, offsetHours)
+
+  const sign         = offsetHours >= 0 ? '+' : '−'
+  const absH         = Math.floor(Math.abs(offsetHours))
+  const absM         = Math.round((Math.abs(offsetHours) - absH) * 60)
+  const offsetLabel  = absM > 0
+    ? `UTC${sign}${absH}:${String(absM).padStart(2, '0')}`
+    : `UTC${sign}${absH}`
+
+  const resultBox  = document.getElementById('utc-result-box')
+  resultBox.classList.add('visible')
+  document.getElementById('utc-result-value').textContent = utcTimeStr
+  document.getElementById('utc-result-meta').textContent  =
+    `${localTimeStr} local (${convSelectedAirport.city}) · ${offsetLabel} · → ${utcTimeStr} UTC`
+}
+
+// Close converter dropdown when clicking outside
+document.addEventListener('click', (event) => {
+  const dropdown = document.getElementById('conv-airport-dropdown')
+  const searchEl = document.getElementById('conv-airport-search')
+  if (dropdown && !dropdown.contains(event.target) && event.target !== searchEl) {
+    dropdown.style.display = 'none'
   }
 })
 
