@@ -434,19 +434,20 @@
       background: none;
       border: 1px dashed var(--border);
       border-radius: 10px;
-      color: var(--muted);
+      color: #7DD3E8;
       font-family: var(--sans);
-      font-size: 12px;
-      font-weight: 500;
+      font-size: 13px;
+      font-weight: 600;
       padding: 11px 16px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: space-between;
       transition: border-color 0.15s, color 0.15s;
+      letter-spacing: 0.01em;
     }
-    .etd-toggle-btn:hover { border-color: var(--cyan-dim); color: var(--text); }
-    .etd-toggle-btn.open  { border-color: var(--cyan-dim); border-style: solid; color: var(--text); }
+    .etd-toggle-btn:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+    .etd-toggle-btn.open  { border-color: var(--cyan-dim); border-style: solid; color: var(--cyan); }
     .etd-toggle-btn span  { font-size: 14px; line-height: 1; }
 
     .etd-section {
@@ -685,19 +686,20 @@
       background: none;
       border: 1px dashed #2A3550;
       border-radius: 10px;
-      color: var(--muted);
+      color: #7DD3E8;
       font-family: var(--sans);
-      font-size: 12px;
-      font-weight: 500;
+      font-size: 13px;
+      font-weight: 600;
       padding: 11px 16px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: space-between;
       transition: border-color 0.15s, color 0.15s;
+      letter-spacing: 0.01em;
     }
-    .utc-converter-btn:hover { border-color: var(--cyan-dim); color: var(--text); }
-    .utc-converter-btn.open  { border-color: var(--cyan-dim); border-style: solid; color: var(--text); }
+    .utc-converter-btn:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+    .utc-converter-btn.open  { border-color: var(--cyan-dim); border-style: solid; color: var(--cyan); }
 
     .utc-converter-section {
       display: none;
@@ -2110,6 +2112,13 @@ document.addEventListener('click', (event) => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch((error) => {
     console.error('Service worker registration failed:', error)
+  })
+
+  // When a new SW activates and posts SW_UPDATED, reload to serve fresh HTML
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SW_UPDATED') {
+      window.location.reload()
+    }
   })
 }
 </script>
